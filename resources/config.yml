@@ -1,0 +1,45 @@
+---
+messages:
+  target-not-online: '§c{target} is not online'
+  no-free-duel-levels: "§cAll duel levels currently in use, please try again later"
+  no-active-duel-requests: "§cYou do not have any active duel requests"
+  duel-help: "§aUsage:\n§9- §b/duel (player)\n§9- §b/duel accept"
+  duel-cooldown: "§cPlease wait §f{cooldown} §cseconds before running this command again"
+  duel-request: '§a{challenger} has challenged you to a §b{kit}§a duel, run /duel accept to accept'
+  challenged-player-to-duel: '§aYou have challenged {defender} to a §b{kit}§a duel'
+  duel-accepted: "§a{defender} accepted your duel request"
+  duel-request-timeout: '§cThe duel request to §6{defender} timed out'
+  title-duel-countdown: '§6Duel Starting in\n§b{time}'
+  title-duel-countdown-critical: '§b{time}'
+  title-duel-start: '§aDuel Started'
+  duel-popup: '§7[§a{time_remaining}§7]\n\n§9Your CPS: §b{playercps} §1| §9Their CPS: §b{opponentcps}'
+  duel-unexpected-terminate: '§cDuel ended unexpectedly, Reason: {reason}'
+  title-duel-result-won: '§aYou Won'
+  title-duel-result-lost: '§cYou Lost'
+  subtitle-duel-end-countdown: '§7You will be teleported to spawn in §e{time_remaining}'
+  title-duel-result-draw: '§5You Drew'
+duel-time: 180
+duel-countdown-time: 10
+duel-request-cooldown: 30
+duelmenu-buttons:
+  gapple:
+    button: '§6§lGapple Kit'
+    url: 'https://gamepedia.cursecdn.com/minecraft_gamepedia/thumb/5/54/Golden_Apple_JE2_BE2.png/120px-Golden_Apple_JE2_BE2.png?version=b3654253fdf63ac1f7e5371e26152d99'
+  NoDebuff:
+    button: '§l§4NoDebuff Kit'
+    url: 'https://gamepedia.cursecdn.com/minecraft_gamepedia/thumb/3/39/Splash_Potion_of_Healing_Revision_1.png/120px-Splash_Potion_of_Healing_Revision_1.png?version=e41d6460d843bab03872bebc13d9dc62'
+  sg:
+    button: '§2§lSurvival Games'
+forms:
+  gameend:
+    title: '§l§4Duel Finished'
+    content-winner: '§bYou won a {kit} duel against §a{opponent}'
+    button-rematch: '§8Request a rematch'
+    button-see-inventory: '§8See your opponents match inventory'
+    content-loser: '§cYou lost a {kit} duel against §b{opponent}§8[§a{opponent-health}§8]'
+    content-draw: '§aYou drew against {opponent} in a {kit} duel'
+    content-stats: '§aYour Stats:{line}{line}§9Clicks: §b{clicks}{line}§9Hits: §b{hits}{line}§9Damage Dealt: §b{damage-dealt}{line}§9Damage Taken: §b{damage-taken}{line}{line}§cYour Opponents Stats:{line}§9Clicks: §b{op-clicks}{line}§9Hits: §b{op-hits}'
+  duelmenu:
+    content: 'Select an option'
+    title: '§4§lDuels'
+...

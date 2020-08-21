@@ -1,0 +1,77 @@
+---
+gapple:
+  armor:
+  - 310:0:1:DEFAULT:Protection:1:Unbreaking:3
+  - 311:0:1:DEFAULT:Protection:1:Unbreaking:3
+  - 312:0:1:DEFAULT:Protection:1:Unbreaking:3
+  - 313:0:1:DEFAULT:Protection:1:Unbreaking:3
+  item:
+    0: 276:0:1:&r&6&lGapple &r&6Sword:Sharpness:1
+    1: 261:0:1:&r&6&lGapple &r&6Bow:Power:1:Unbreaking:3
+    2: 322:0:64
+    9: 262:0:64
+NoDebuff:
+  armor:
+  - 310:0:1:DEFAULT:Protection:1:Unbreaking:3
+  - 311:0:1:DEFAULT:Protection:1:Unbreaking:3
+  - 312:0:1:DEFAULT:Protection:1:Unbreaking:3
+  - 313:0:1:DEFAULT:Protection:1:Unbreaking:3
+  item:
+  - 276:0:1:&r&c&lNoDebuff &r&cSword:Sharpness:1
+  - "368:0:16"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "373:14:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+  - "438:22:1"
+sg:
+  armor:
+  - 310:0:1:DEFAULT:Protection:1:Unbreaking:3
+  - "303:0:1"
+  - 312:0:1:DEFAULT:Protection:1:Unbreaking:3
+  - 313:0:1:DEFAULT:Protection:1:Unbreaking:3
+  item:
+    0: 276:1:1:&r&c&lNoDebuff &r&cSword:Sharpness:1
+    1: 297:0:64
+    2: "373:14:1"
+    3: "368:0:8"
+    8: "325:5:1"
+    12: "368:0:8"
+    13: 5:4:64
+    14: 5:5:64
+    15: 5:0:64
+    16: 5:1:64
+    17: 5:2:64
+    18: 5:3:64
+    27: "58:0:3"
+    31: "388:0:4"
+...
