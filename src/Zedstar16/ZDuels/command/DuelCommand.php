@@ -26,6 +26,10 @@ class DuelCommand extends Command
         $server = Server::getInstance();
         $mgr = Main::getDuelManager();
         if ($sender instanceof Player) {
+            if (Main::getDuelQueue()->isInAQueue($sender)) {
+                $sender->sendMessage(Main::prefix . "You are already in the duels queue");
+                return;
+            }
             if (isset($args[0])) {
                 if ($args[0] == "accept") {
                     $data = $mgr->getDuelRequest($sender);
@@ -39,14 +43,22 @@ class DuelCommand extends Command
                 } else {
                     $pn = $sender->getName();
                     $ct = floatval(Main::getInstance()->getConfig()->get("duel-request-cooldown"));
-                    if((!isset($this->cooldown[$pn])) || (($this->cooldown[$pn] + $ct - time() <= 0))) {
+                    if ((!isset($this->cooldown[$pn])) || (($this->cooldown[$pn] + $ct - time() <= 0))) {
                         $p = $server->getPlayer($args[0]);
+                        if ($p === $sender) {
+                            return;
+                        }
+                        $duel = Main::getDuelManager()->getDuel($p);
+                        if ($duel !== null) {
+                            $sender->sendMessage(Main::prefix . "§f{$p->getName()}§7 is already in a duel");
+                            return;
+                        }
                         if ($p !== null) {
                             $this->sendDuelUI($sender, $p);
                         } else $sender->sendMessage(Main::msg("target-not-online", "target", $args[0]));
-                    }else $sender->sendMessage(Main::msg("duel-cooldown", "cooldown", ($this->cooldown[$pn] + $ct - time())));
+                    } else $sender->sendMessage(Main::msg("duel-cooldown", "cooldown", ($this->cooldown[$pn] + $ct - time())));
                 }
-            }else $sender->sendMessage(Main::msg("duel-help"));
+            } else $sender->sendMessage(Main::msg("duel-help"));
         } else $sender->sendMessage("§cYou can only run this command in-game");
     }
 
@@ -65,20 +77,21 @@ class DuelCommand extends Command
             }
         }
 
-        $form = new SimpleForm(function (Player $player, $data) use($buttons, $target) {
+        $form = new SimpleForm(function (Player $player, $data) use ($buttons, $target) {
             if ($data === null) {
             } else {
                 if (isset($buttons[$data])) {
                     $this->cooldown[$player->getName()] = time();
                     Main::getInstance()->getDuelManager()->duelRequest(Main::getDuelKitManager()->getKit($buttons[$data]["kitname"]), $player, $target);
-                } else $player->sendMessage("§cError, invalid option");
+                } else $player->sendMessage(Main::prefix . "Error, invalid option");
             }
         });
         $form->setContent(Main::form("duelmenu.content"));
         $form->setTitle(Main::form("duelmenu.title"));
         foreach ($buttons as $data) {
             if (strlen($data["url"]) > 1) {
-                $form->addButton($data["button"], SimpleForm::IMAGE_TYPE_URL, $data["url"]);
+                $url = strpos($data["url"], "http") !== false;
+                $form->addButton($data["button"], $url ? SimpleForm::IMAGE_TYPE_URL : SimpleForm::IMAGE_TYPE_PATH, $data["url"]);
             } else $form->addButton($data["button"]);
         }
         $p->sendForm($form);

@@ -18,6 +18,7 @@ namespace Zedstar16\ZDuels\managers;
 
 use pocketmine\level\Level;
 use pocketmine\Player;
+use pocketmine\utils\BinaryStream;
 use Zedstar16\ZDuels\duel\DuelKit;
 use Zedstar16\ZDuels\duel\DuelLevel;
 use Zedstar16\ZDuels\Main;

@@ -16,11 +16,14 @@
 
 namespace Zedstar16\ZDuels\duel;
 
+use pocketmine\entity\Entity;
+use pocketmine\item\Item;
 use pocketmine\level\Position;
 use pocketmine\math\Vector3;
 use pocketmine\Player;
 use pocketmine\Server;
 use Zedstar16\HorizonCore\HorizonPlayer;
+use de\Fireworks;
 use Zedstar16\ZDuels\constant\Constants;
 use Zedstar16\ZDuels\Main;
 
@@ -50,10 +53,6 @@ class Duel
         $this->countdownTimeRemaining = Main::getInstance()->getConfig()->get("duel-countdown-time");
         $this->endTimeRemaining = 5;
         $this->baseTimer = $this->timeRemaining + $this->countdownTimeRemaining + $this->endTimeRemaining;
-        if ($this->challenger instanceof HorizonPlayer && $this->defender instanceof HorizonPlayer) {
-            $this->challenger->getSession()->getScoreboard()->setScoreboard(new \Zedstar16\HorizonCore\components\HUD\Duel($this->challenger));
-            $this->defender->getSession()->getScoreboard()->setScoreboard(new \Zedstar16\HorizonCore\components\HUD\Duel($this->defender));
-        }
         $this->init();
     }
 
@@ -66,7 +65,6 @@ class Duel
         if (!Main::getInstance()->hasSavedInventory($this->defender)) {
             Main::getInstance()->saveInventory($this->defender);
         }
-        Main::getInstance()->saveInventory($this->defender);
         $this->challenger->setGamemode(2);
         $this->defender->setGamemode(2);
         $this->challenger->setImmobile(true);
@@ -78,8 +76,8 @@ class Duel
     public function start()
     {
         $this->stage = Constants::DUEL_IN_PROGRESS;
-        $this->challenger->addTitle(Main::msg("title-duel-start"));
-        $this->defender->addTitle(Main::msg("title-duel-start"));
+        $this->challenger->sendTitle(Main::msg("title-duel-start"));
+        $this->defender->sendTitle(Main::msg("title-duel-start"));
         $this->challenger->setImmobile(false);
         $this->defender->setImmobile(false);
         $this->kit->set($this->challenger);
@@ -93,7 +91,8 @@ class Duel
             $cps = Main::getCPS($p);
             $timeRemaining = gmdate("i:s", $this->timeRemaining);
             $string = Main::msg("duel-popup", ["playercps", "opponentcps", "time_remaining"], [$cps, $opponent_cps, $timeRemaining]);
-            $p->sendPopup($string);
+            /** @var Player $p */
+            $p->sendTip($string);
         }
     }
 
@@ -115,25 +114,26 @@ class Duel
             if ($this->countdownTimeRemaining > 5) {
                 $title = Main::msg("title-duel-countdown", "time", gmdate("i:s", $this->countdownTimeRemaining));
             } else  $title = Main::msg("title-duel-countdown-critical", "time", $this->countdownTimeRemaining);
-            $this->challenger->addTitle($title);
-            $this->defender->addTitle($title);
+            $this->challenger->sendTitle($title, "", 0, 15, 5);
+            $this->defender->sendTitle($title, "", 0, 15, 5);
             $this->countdownTimeRemaining--;
         }
         if ($this->stage == Constants::DUEL_IN_PROGRESS) {
             $this->timeRemaining--;
             $this->displayPopup();
-            $this->displayPopup();
+            $this->challenger->setFood(20);
+            $this->defender->setFood(20);
         }
         if ($this->timeRemaining == 0 && $this->stage == Constants::DUEL_IN_PROGRESS) {
             $this->draw();
         }
         if ($this->stage == Constants::DUEL_FINISHED) {
             if ($this->endTimeRemaining == 0) {
-                $this->challenger->addSubTitle("§aTeleporting");
+                $this->challenger->sendSubTitle("§aTeleporting");
                 $this->end($this->challenger);
                 $this->end($this->defender);
             } else {
-                $this->challenger->addSubTitle(Main::msg("subtitle-duel-end-countdown", "time_remaining", $this->endTimeRemaining));
+                $this->challenger->sendSubTitle(Main::msg("subtitle-duel-end-countdown", "time_remaining", $this->endTimeRemaining));
                 $this->endTimeRemaining--;
             }
         }
@@ -146,11 +146,27 @@ class Duel
         $this->results[$loser->getName()] = Constants::DUEL_LOST;
         Main::getInstance()->scoreStats($winner->getName(), "wins");
         Main::getInstance()->scoreStats($loser->getName(), "losses");
-        $winner->addTitle(Main::msg("title-duel-result-won"));
-        $loser->addTitle(Main::msg("title-duel-result-lost"));
+        $winner->sendTitle(Main::msg("title-duel-result-won"));
+        $loser->sendTitle(Main::msg("title-duel-result-lost"));
         $loser->setGamemode(3);
         $loser->teleport(new Position($winner->x, $winner->y + 7, $winner->z, $winner->getLevel()));
         $this->winner_health = (int)$winner->getHealth();
+        $msg = "§f{$winner->getName()}§c[$this->winner_health]§7 won a §f{$this->kit->getName()} §7duel against §f{$loser->getName()}";
+        if ($this->kit->getName() === "NoDebuff") {
+            $winner_pots = abs($this->getPotCount($winner->getInventory()->getContents())-33);
+            $msg = "§f{$winner->getName()}§c[$this->winner_health]§7 §6$winner_pots potted §f{$loser->getName()} §7in a §fNoDebuff §7Duel";
+        }
+        Server::getInstance()->broadcastMessage(Main::prefix . $msg);
+    }
+
+    public function getPotCount(array $items)
+    {
+        return count(array_filter($items, function ($item) {
+            if(!$item instanceof Item) {
+                $item = Main::getInstance()->jsonDeserialize($item);
+            }
+            return ($item->getId() === Item::SPLASH_POTION) && $item->getDamage() === 22;
+        }));
     }
 
     public function draw()
@@ -158,8 +174,9 @@ class Duel
         $this->results = array_fill_keys([$this->challenger->getName(), $this->defender->getName()], Constants::DUEL_DRAW);
         $this->stage = Constants::DUEL_FINISHED;
         $title = Main::msg("title-duel-result-draw");
-        $this->challenger->addTitle($title);
-        $this->defender->addTitle($title);
+        $this->challenger->sendTitle($title);
+        $this->defender->sendTitle($title);
+        Server::getInstance()->broadcastMessage(Main::prefix . "§f{$this->challenger->getName()}§7 drew in a §f{$this->kit->getName()}§7 duel against §f{$this->defender->getName()}");
     }
 
     public function saveMatchInventory($name, $inventory = [], $armorinventory = [])
@@ -183,6 +200,7 @@ class Duel
             $player->getArmorInventory()->clearAll();
             $player->setGamemode(0);
             $player->setHealth(20);
+            $player->removeAllEffects();
             $player->teleport($s->getDefaultLevel()->getSpawnLocation());
             Main::getInstance()->sendGameEndUI($player, $this);
             Main::getInstance()->loadSavedInventory($player);
@@ -214,8 +232,28 @@ class Duel
         $player->getInventory()->clearAll();
         $player->getArmorInventory()->clearAll();
         $player->setGamemode(0);
+        $player->setImmobile(false);
         $player->teleport($spawn);
         Main::getInstance()->loadSavedInventory($player);
+    }
+
+    public function sendFireworks(Player $p)
+    {
+        try {
+            for ($i = 0; $i < 10; $i++) {
+                $firework = new Fireworks();
+                $color = [Fireworks::COLOR_RED, Fireworks::COLOR_YELLOW, Fireworks::COLOR_GREEN, Fireworks::COLOR_LIGHT_AQUA, Fireworks::COLOR_BLUE, Fireworks::COLOR_PINK, Fireworks::COLOR_DARK_PINK];
+                $firework->addExplosion(Fireworks::TYPE_HUGE_SPHERE, $color[mt_rand(0, 6)]);
+                $firework->setFlightDuration(1);
+                $pos = new Vector3($p->x + mt_rand(-4, 4), $p->y, $p->z + mt_rand(-4, 4));
+                $level = $p->getLevel();
+                $nbt = Entity::createBaseNBT($pos, new Vector3(0.001, 0.05, 0.001), lcg_value() * 360, 90);
+                $entity = Entity::createEntity("FireworksRocket", $level, $nbt, $firework);
+                $entity->spawnToAll();
+            }
+        } catch (\Throwable $err) {
+            Server::getInstance()->getLogger()->logException($err);
+        }
     }
 
     public function getOpponent(Player $player)

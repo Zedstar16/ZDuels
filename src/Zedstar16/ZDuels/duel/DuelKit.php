@@ -38,7 +38,9 @@ class DuelKit
 
     public function set(Player $player)
     {
-        Main::getInstance()->saveInventory($player);
+        if(!Main::getInstance()->hasSavedInventory($player)) {
+            Main::getInstance()->saveInventory($player);
+        }
         $player->getInventory()->clearAll();
         $player->getArmorInventory()->clearAll();
         $this->setInventory($player);
@@ -88,6 +90,9 @@ class DuelKit
         $damage = $data[1];
         $count = $data[2];
         $item = ItemFactory::get($id, $damage, $count);
+        $nbt = $item->getNamedTag();
+        $nbt->setString("zduels", "duel");
+        $item->setNamedTag($nbt);
         if (isset($data[3])) {
             if ($data[3] !== "DEFAULT") {
                 $item->setCustomName(str_replace("&", "§", $data[3]));

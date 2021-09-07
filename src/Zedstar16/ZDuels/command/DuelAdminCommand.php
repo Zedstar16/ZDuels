@@ -20,7 +20,9 @@ namespace Zedstar16\ZDuels\command;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\Player;
+use pocketmine\Server;
 use Zedstar16\ZDuels\constant\Constants;
+use Zedstar16\ZDuels\libs\FormAPI\CustomForm;
 use Zedstar16\ZDuels\Main;
 
 class DuelAdminCommand extends Command
@@ -35,6 +37,36 @@ class DuelAdminCommand extends Command
     public function execute(CommandSender $sender, string $commandLabel, array $args)
     {
         $leveldata = Main::getInstance()->getJson("levels.json");
+        if($sender->isOp()){
+            if($args[0] === "tp") {
+                if (count($args) >= 3) {
+                    if (!Server::getInstance()->isLevelLoaded($args[1])) {
+                        Server::getInstance()->loadLevel($args[1]);
+                    }
+                    $tp = Server::getInstance()->getLevelByName($args[1])->getSpawnLocation();
+                    $p = Server::getInstance()->getPlayer($args[2]);
+                    if ($p === null) {
+                        return;
+                    }
+                    $p->teleport($tp);
+                }
+            }elseif($args[0] === "form"){
+                $player = Server::getInstance()->getPlayer($args[1]);
+                if($player === null){
+                    return;
+                }
+                $form = new CustomForm(function ($player, $data = null): void {
+                    if ($data === null) {
+                        return;
+                    }
+                    Server::getInstance()->dispatchCommand($player, "duel ".$data[1]);
+                });
+                $form->setTitle("§8§l(§9DUELS§8)§r§7 ");
+                $form->addLabel("Duel a player");
+                $form->addInput("Enter username", "username");
+                $player->sendForm($form);
+            }
+        }
         if ($sender instanceof Player) {
             $help = implode("\n", [
                 "§aUsage for Duels Admin",

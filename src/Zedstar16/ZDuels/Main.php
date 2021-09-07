@@ -19,17 +19,20 @@ namespace Zedstar16\ZDuels;
 use pocketmine\inventory\transaction\action\SlotChangeAction;
 use pocketmine\item\Item;
 use pocketmine\item\ItemFactory;
+use pocketmine\level\generator\GeneratorManager;
 use pocketmine\permission\Permission;
 use pocketmine\Player;
 use pocketmine\plugin\PluginBase;
 use pocketmine\event\Listener;
 use pocketmine\scheduler\ClosureTask;
+use Zedstar16\_Api\OwnageAPI;
 use Zedstar16\ZDuels\command\DuelAdminCommand;
 use Zedstar16\ZDuels\command\DuelCommand;
 use Zedstar16\ZDuels\command\DuelQueueCommand;
 use Zedstar16\ZDuels\constant\Constants;
 use Zedstar16\ZDuels\duel\Duel;
 use Zedstar16\ZDuels\duel\DuelQueue;
+use Zedstar16\ZDuels\generator\VoidGenerator;
 use Zedstar16\ZDuels\libs\FormAPI\SimpleForm;
 use Zedstar16\ZDuels\libs\invmenu\inventory\InvMenuInventory;
 use Zedstar16\ZDuels\libs\invmenu\InvMenu;
@@ -56,11 +59,15 @@ class Main extends PluginBase implements Listener
     public static $inv = [];
     public static $horizon = false;
 
+    public const prefix = "§8§l(§9DUELS§8)§r§7 ";
+
     public function onEnable(): void
     {
         self::$instance = $this;
         $this->getServer()->getCommandMap()->register("duel", new DuelCommand("duel", "Challenge a player to a duel!", "/duel <player/accept>"));
-        $this->getServer()->getCommandMap()->register("duelqueue", new DuelQueueCommand("duelqueue", "Challenge a player to a duel!", "/duelqueue"));
+        if($this->getServer()->getPort() !== 19134 || OwnageAPI::getServerManager()->getServerName() !== "KitPvP") {
+            $this->getServer()->getCommandMap()->register("duelqueue", new DuelQueueCommand("duelqueue", "Open Duel Menu", "/duelqueue"));
+        }
         $this->getServer()->getCommandMap()->register("duela", new DuelAdminCommand("duela", "Duels Admin management command"));
         $this->getServer()->getPluginManager()->addPermission(new Permission("zduels.admin", "ZDuels admin perm", Permission::DEFAULT_OP));
         $this->getServer()->getPluginManager()->registerEvents(new EventListener($this), $this);
@@ -81,9 +88,14 @@ class Main extends PluginBase implements Listener
                 }
             }
         }), 20);
-        if($this->getServer()->getPluginManager()->getPlugin("HorizonCore") !== null){
+        if ($this->getServer()->getPluginManager()->getPlugin("HorizonCore") !== null) {
             self::$horizon = true;
         }
+    }
+
+    public function onLoad()
+    {
+        GeneratorManager::addGenerator(VoidGenerator::class, "void", true);
     }
 
     public static function getInstance(): Main
@@ -105,7 +117,9 @@ class Main extends PluginBase implements Listener
     {
         return self::$duelkitmanager;
     }
-    public static function getDuelQueue() : DuelQueue{
+
+    public static function getDuelQueue(): DuelQueue
+    {
         return self::$duelqueue;
     }
 
@@ -130,9 +144,17 @@ class Main extends PluginBase implements Listener
             array_pop($this->data[$name]);
         }
         if (!empty($this->data[$name])) {
-            $cps = count(array_filter($this->data[$name], static function (float $t) use ($time) : bool {
-                return ($time - $t) <= 1;
-            }));
+            $cps = count(
+                    array_filter(
+                        $this->data[$name],
+                        static function (float $t) use ($time): bool {
+                            return ($time - $t) <= 1;
+                        }
+                    )
+                ) - 1;
+        }
+        if ($cps <= 0) {
+            $cps = 1;
         }
         $duel = self::getDuelManager()->getDuel($p);
         $this->cps[$name] = ["cps" => $cps, "time" => time()];
@@ -158,10 +180,10 @@ class Main extends PluginBase implements Listener
         $opponent = $duel->getOpponent($p);
         $form = new SimpleForm(function (Player $player, $data) use ($p, $duel) {
             $opponent = $duel->getOpponent($player);
-            if ($data == null) {
+            if ($data === null) {
                 return;
             }
-            if ($opponent == null) {
+            if ($opponent === null) {
                 $player->sendMessage(Main::msg("opponent-not-online"));
                 return;
             }
@@ -256,6 +278,7 @@ class Main extends PluginBase implements Listener
 
     public function saveInventory(Player $player)
     {
+        echo "\n\nSaving invetnroy for {$player->getName()}\n\n";
         $data = $this->getJson("inventory.json");
         foreach ($player->getInventory()->getContents() as $slot => $item) {
             $data[$player->getName()]["inventory"][$slot] = $item->jsonSerialize();
@@ -277,7 +300,10 @@ class Main extends PluginBase implements Listener
     public function loadSavedInventory(Player $player)
     {
         if ($this->hasSavedInventory($player)) {
-            $data = $this->getJson("inventory.json")[$player->getName()];
+            $player->getInventory()->clearAll();
+            $player->getArmorInventory()->clearAll();
+            $rawdata = $this->getJson("inventory.json");
+            $data = $rawdata[$player->getName()];
             if (isset($data["inventory"])) {
                 foreach ($data["inventory"] as $slot => $item) {
                     $player->getInventory()->setItem($slot, $this->jsonDeserialize($item));
@@ -288,8 +314,8 @@ class Main extends PluginBase implements Listener
                     $player->getArmorInventory()->setItem($slot, $this->jsonDeserialize($item));
                 }
             }
-            unset($data[$player->getName()]);
-            $this->saveJson("inventory.json", $data);
+            unset($rawdata[$player->getName()]);
+            $this->saveJson("inventory.json", $rawdata);
         }
     }
 
@@ -342,6 +368,47 @@ class Main extends PluginBase implements Listener
         }
     }
 
+    # the recursive copy and delete are from stackoverflow
+
+    public static function recurseCopy($src, $dst, $childFolder = '')
+    {
+        $dir = opendir($src);
+        @mkdir($dst);
+        if ($childFolder != '') {
+            @mkdir($dst . '/' . $childFolder);
+            while (false !== ($file = readdir($dir))) {
+                if (($file != '.') && ($file != '..')) {
+                    if (is_dir($src . '/' . $file)) {
+                        self::recurseCopy($src . '/' . $file, $dst . '/' . $childFolder . '/' . $file);
+                    } else {
+                        copy($src . '/' . $file, $dst . '/' . $childFolder . '/' . $file);
+                    }
+                }
+            }
+        } else {
+            // return $cc;
+            while (false !== ($file = readdir($dir))) {
+                if (($file != '.') && ($file != '..')) {
+                    if (is_dir($src . '/' . $file)) {
+                        self::recurseCopy($src . '/' . $file, $dst . '/' . $file);
+                    } else {
+                        copy($src . '/' . $file, $dst . '/' . $file);
+                    }
+                }
+            }
+        }
+        closedir($dir);
+    }
+
+    public static function rmdirRecursive(string $dir)
+    {
+        $files = array_diff(scandir($dir), ['.', '..']);
+        foreach ($files as $file) {
+            (is_dir("$dir/$file")) ? self::rmdirRecursive("$dir/$file") : unlink("$dir/$file");
+        }
+        return rmdir($dir);
+    }
+
     public function scoreStats($name, $type)
     {
         $data = $this->getJson("stats.json");
@@ -351,7 +418,7 @@ class Main extends PluginBase implements Listener
         $this->saveJson("stats.json", $data);
     }
 
-    private function jsonDeserialize(array $data): Item
+    public function jsonDeserialize(array $data): Item
     {
         $nbt = "";
         if (isset($data["nbt"])) {
@@ -388,8 +455,14 @@ class Main extends PluginBase implements Listener
 
     public function onDisable(): void
     {
+        foreach ($this->getServer()->getOnlinePlayers() as $player){
+            $duel = Main::getDuelManager()->getDuel($player);
+            if ($duel !== null) {
+                $player->getInventory()->clearAll();
+                $player->getArmorInventory()->clearAll();
+            }
+        }
         $this->cps = [];
         $this->data = [];
-
     }
 }
