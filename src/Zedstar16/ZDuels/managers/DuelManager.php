@@ -53,6 +53,15 @@ class DuelManager
         return null;
     }
 
+    public function getDuelSpectating(Player $player) : ?Duel{
+        foreach ($this->duels as $duel){
+            if(in_array($player, $duel->spectators, true)){
+                return $duel;
+            }
+        }
+        return null;
+    }
+
     public function terminateDuel(Duel $duel)
     {
         foreach ($this->duels as $key => $listedduel) {

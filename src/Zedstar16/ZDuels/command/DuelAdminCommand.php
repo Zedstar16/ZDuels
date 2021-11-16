@@ -19,6 +19,7 @@ namespace Zedstar16\ZDuels\command;
 
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
+use pocketmine\item\Item;
 use pocketmine\Player;
 use pocketmine\Server;
 use Zedstar16\ZDuels\constant\Constants;
@@ -67,7 +68,7 @@ class DuelAdminCommand extends Command
                 $player->sendForm($form);
             }
         }
-        if ($sender instanceof Player) {
+        if ($sender instanceof Player && $sender->isOp()) {
             $help = implode("\n", [
                 "§aUsage for Duels Admin",
                 "§9- §b/duela level setspawn <1/2> §a- Set spawn position for current duel level",
@@ -123,6 +124,28 @@ class DuelAdminCommand extends Command
                         }
                         Main::getDuelKitManager()->loadKits();
                         $sender->sendMessage("§aReloaded all configurations");
+                        break;
+                    case "sp":
+                        if($args[1] === "s") {
+                            $dummy = new \specter\api\DummyPlayer("tester69");
+                        }else {
+                            $p = Server::getInstance()->getPlayer("tester69");
+                            $inv = $p->getArmorInventory();
+                            if ($args[1] === "d") {
+                               $inv->setHelmet(Item::get(Item::DIAMOND_HELMET));
+                                $inv->setChestplate(Item::get(Item::DIAMOND_CHESTPLATE));
+                                $inv->setLeggings(Item::get(Item::DIAMOND_LEGGINGS));
+                                $inv->setBoots(Item::get(Item::DIAMOND_BOOTS));
+                            }elseif($args[1] === "n"){
+                                $inv->setHelmet(Item::get(748));
+                                $inv->setChestplate(Item::get(749));
+                                $inv->setLeggings(Item::get(750));
+                                $inv->setBoots(Item::get(751));
+                            }elseif($args[1] === "h"){
+                                $p->setHealth(20);
+                            }
+                        }
+
                         break;
                     case "rename":
                         if(isset($args[1])){

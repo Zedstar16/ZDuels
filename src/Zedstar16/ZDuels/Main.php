@@ -302,6 +302,7 @@ class Main extends PluginBase implements Listener
         if ($this->hasSavedInventory($player)) {
             $player->getInventory()->clearAll();
             $player->getArmorInventory()->clearAll();
+            $player->getCursorInventory()->clearAll();
             $rawdata = $this->getJson("inventory.json");
             $data = $rawdata[$player->getName()];
             if (isset($data["inventory"])) {
@@ -460,6 +461,7 @@ class Main extends PluginBase implements Listener
             if ($duel !== null) {
                 $player->getInventory()->clearAll();
                 $player->getArmorInventory()->clearAll();
+                $player->getCursorInventory()->clearAll();
             }
         }
         $this->cps = [];

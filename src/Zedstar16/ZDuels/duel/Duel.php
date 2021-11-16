@@ -16,10 +16,13 @@
 
 namespace Zedstar16\ZDuels\duel;
 
+use pocketmine\entity\Effect;
+use pocketmine\entity\EffectInstance;
 use pocketmine\entity\Entity;
 use pocketmine\item\Item;
 use pocketmine\level\Position;
 use pocketmine\math\Vector3;
+use pocketmine\network\mcpe\protocol\types\GameMode;
 use pocketmine\Player;
 use pocketmine\Server;
 use Zedstar16\HorizonCore\HorizonPlayer;
@@ -40,6 +43,14 @@ class Duel
     public $baseTimer, $timeRemaining, $countdownTimeRemaining, $endTimeRemaining, $winner_health, $stage;
     /** @var array */
     public $match_inventories, $stats, $competitors, $results = [];
+    /** @var Player[] */
+    public $spectators = [];
+
+    public const EFFECTS = [
+        "NoDebuff" => [Effect::SPEED, 0],
+        "Combo" => [Effect::REGENERATION, 1],
+    ];
+
 
     public function __construct(DuelKit $kit, Player $challenger, Player $defender)
     {
@@ -54,6 +65,17 @@ class Duel
         $this->endTimeRemaining = 5;
         $this->baseTimer = $this->timeRemaining + $this->countdownTimeRemaining + $this->endTimeRemaining;
         $this->init();
+    }
+
+    public function applyEffects()
+    {
+        foreach (self::EFFECTS as $kit => $effect_data){
+            if($this->kit->getName() === $kit){
+               foreach ([$this->challenger, $this->defender] as $p){
+                   $p->addEffect(new EffectInstance(Effect::getEffect($effect_data[0]), 99999, $effect_data[1], false));
+               }
+            }
+        }
     }
 
     public function init()
@@ -82,6 +104,35 @@ class Duel
         $this->defender->setImmobile(false);
         $this->kit->set($this->challenger);
         $this->kit->set($this->defender);
+        $this->challenger->removeAllEffects();
+        $this->challenger->removeAllEffects();
+        $this->applyEffects();
+    }
+
+    public function addSpectator(Player $player)
+    {
+        $this->spectators[] = $player;
+        $player->setGamemode(3);
+        $pos = $this->challenger->getPosition();
+        $player->teleport(new Position($pos->x, $pos->y + 3, $pos->z, $pos->getLevel()));
+        foreach ([$this->challenger, $this->defender] as $p) {
+            $p->sendMessage(Main::prefix . "§f{$player->getName()}§7 is now spectating your Duel!");
+        }
+    }
+
+    public function removeSpectator(Player $player, $unexpected = true)
+    {
+        $key = array_search($player, $this->spectators, true);
+        if (isset($this->spectators[$key])) {
+            unset($this->spectators[$key]);
+        }
+        $player->teleport(Server::getInstance()->getDefaultLevel()->getSpawnLocation());
+        $player->setGamemode(GameMode::ADVENTURE);
+        if ($unexpected) {
+            foreach ([$this->challenger, $this->defender] as $p) {
+                $p->sendMessage(Main::prefix . "§f{$player->getName()}§7 is no longer spectating your Duel");
+            }
+        }
     }
 
     public function displayPopup()
@@ -93,6 +144,17 @@ class Duel
             $string = Main::msg("duel-popup", ["playercps", "opponentcps", "time_remaining"], [$cps, $opponent_cps, $timeRemaining]);
             /** @var Player $p */
             $p->sendTip($string);
+        }
+        foreach ($this->spectators as $spectator) {
+            $string = "";
+            foreach ([$this->challenger, $this->defender] as $p) {
+                $name = $p->getName();
+                $stat = $this->stats[$name] ?? null;
+                if ($stat !== null) {
+                    $string .= "§a$name: §b$stat[hits]§9 Hits §1| §b$stat[damage_dealt] §9Damage Dealt" . ($p === $this->challenger ? "\n" : "");
+                }
+            }
+            $spectator->sendTip($string);
         }
     }
 
@@ -152,17 +214,20 @@ class Duel
         $loser->teleport(new Position($winner->x, $winner->y + 7, $winner->z, $winner->getLevel()));
         $this->winner_health = (int)$winner->getHealth();
         $msg = "§f{$winner->getName()}§c[$this->winner_health]§7 won a §f{$this->kit->getName()} §7duel against §f{$loser->getName()}";
-        if ($this->kit->getName() === "NoDebuff") {
-            $winner_pots = abs($this->getPotCount($winner->getInventory()->getContents())-33);
-            $msg = "§f{$winner->getName()}§c[$this->winner_health]§7 §6$winner_pots potted §f{$loser->getName()} §7in a §fNoDebuff §7Duel";
-        }
+        try {
+            if ($this->kit->getName() === "NoDebuff") {
+                $winner_pots = $this->getPotCount($winner->getInventory()->getContents());
+                $loser_pots = $this->getPotCount($this->match_inventories[$loser->getName()]["inventory"]);
+                $msg = "§f{$winner->getName()}§c[$this->winner_health]§7 §6($winner_pots pots) §7won a §fNoDebuff Duel §7against §f{$loser->getName()} §6($loser_pots pots)";
+            }
+        }catch (\Throwable $err){}
         Server::getInstance()->broadcastMessage(Main::prefix . $msg);
     }
 
     public function getPotCount(array $items)
     {
         return count(array_filter($items, function ($item) {
-            if(!$item instanceof Item) {
+            if (!$item instanceof Item) {
                 $item = Main::getInstance()->jsonDeserialize($item);
             }
             return ($item->getId() === Item::SPLASH_POTION) && $item->getDamage() === 22;
@@ -198,12 +263,17 @@ class Duel
             }
             $player->getInventory()->clearAll();
             $player->getArmorInventory()->clearAll();
+            $player->getCursorInventory()->clearAll();
+            $player->getCraftingGrid()->clearAll();
             $player->setGamemode(0);
             $player->setHealth(20);
             $player->removeAllEffects();
             $player->teleport($s->getDefaultLevel()->getSpawnLocation());
             Main::getInstance()->sendGameEndUI($player, $this);
             Main::getInstance()->loadSavedInventory($player);
+            foreach ($this->spectators as $spectator) {
+                $this->removeSpectator($spectator, false);
+            }
         } catch (\Throwable $error) {
             Server::getInstance()->getLogger()->error($error->getMessage() . " at Line: " . $error->getLine());
         }
@@ -221,6 +291,9 @@ class Duel
             $this->handleTerminatedDuelPlayer($this->defender, $reason);
         }
         $this->level->setInUse(false);
+        foreach ($this->spectators as $spectator) {
+            $this->removeSpectator($spectator);
+        }
         Main::getDuelManager()->terminateDuel($this);
     }
 
@@ -231,6 +304,8 @@ class Duel
         $player->sendMessage(Main::msg("duel-unexpected-terminate", ["reason"], [$reason]));
         $player->getInventory()->clearAll();
         $player->getArmorInventory()->clearAll();
+        $player->getCursorInventory()->clearAll();
+        $player->getCraftingGrid()->clearAll();
         $player->setGamemode(0);
         $player->setImmobile(false);
         $player->teleport($spawn);

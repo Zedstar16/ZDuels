@@ -18,25 +18,33 @@ namespace Zedstar16\ZDuels;
 
 use pocketmine\entity\projectile\EnderPearl;
 use pocketmine\entity\projectile\SplashPotion;
+use pocketmine\event\entity\EntityArmorChangeEvent;
 use pocketmine\event\entity\EntityDamageByChildEntityEvent;
 use pocketmine\event\entity\EntityDamageByEntityEvent;
 use pocketmine\event\entity\EntityDamageEvent;
 use pocketmine\event\entity\EntityLevelChangeEvent;
 use pocketmine\event\entity\ProjectileLaunchEvent;
+use pocketmine\event\inventory\InventoryPickupItemEvent;
+use pocketmine\event\inventory\InventoryTransactionEvent;
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerDeathEvent;
+use pocketmine\event\player\PlayerDropItemEvent;
 use pocketmine\event\player\PlayerInteractEvent;
 use pocketmine\event\player\PlayerItemHeldEvent;
 use pocketmine\event\player\PlayerJoinEvent;
 use pocketmine\event\player\PlayerQuitEvent;
 use pocketmine\event\server\CommandEvent;
 use pocketmine\event\server\DataPacketReceiveEvent;
+use pocketmine\inventory\ArmorInventory;
+use pocketmine\inventory\Inventory;
 use pocketmine\item\Item;
+use pocketmine\item\ItemFactory;
 use pocketmine\network\mcpe\protocol\InventoryTransactionPacket;
 use pocketmine\network\mcpe\protocol\LevelSoundEventPacket;
 use pocketmine\network\mcpe\protocol\PlayerActionPacket;
 use pocketmine\Player;
 use pocketmine\utils\TextFormat;
+use Zedstar16\_Api\OwnageAPI;
 use Zedstar16\ZDuels\constant\Constants;
 use Zedstar16\ZDuels\duel\Duel;
 use Zedstar16\ZDuels\libs\invmenu\InvMenu;
@@ -96,10 +104,24 @@ class EventListener implements Listener
         if ($duel !== null) {
             $player->getInventory()->clearAll();
             $player->getArmorInventory()->clearAll();
+            $player->getCursorInventory()->clearAll();
+            $player->getCraftingGrid()->clearAll();
             $duel->terminate("{$player->getName()} logged out");
         }
         if (Main::getDuelQueue()->isInAQueue($player)) {
             Main::getDuelQueue()->removeFromQueue($player);
+        }
+        $spec = Main::getDuelManager()->getDuelSpectating($player);
+        if($spec !== null){
+            $spec->removeSpectator($player);
+        }
+    }
+
+    public function onDrop(PlayerDropItemEvent $event){
+        $p = $event->getPlayer();
+        $spec = Main::getDuelManager()->getDuelSpectating($p);
+        if($spec !== null){
+            $event->setCancelled(true);
         }
     }
 
@@ -149,7 +171,19 @@ class EventListener implements Listener
             if ($subject instanceof Player && $damager instanceof Player) {
                 $duel = Main::getDuelManager()->getDuel($subject);
                 if (Main::getDuelManager()->getDuel($damager) !== null && $duel !== null) {
-                    $event->setModifier(0.0, EntityDamageByEntityEvent::MODIFIER_CRITICAL);
+                    if($duel->kit->getName() === "Combo"){
+                        $kb_vals = [2 => 0.5, 3 => 0.4];
+                        $dist = abs($damager->getFloorY() - $subject->getFloorY());
+                        $modifier = 0.7;
+                        if ($dist >= 2) {
+                            $modifier = $kb_vals[$dist] ?? 0.2;
+                        }
+                        $event->setKnockBack($event->getKnockBack() * $modifier);
+                        $event->setAttackCooldown(0);
+                    }
+                    if($duel->challenger->getName() === "Zedstar16" || $duel->defender->getName() === "Zedstar16") {
+                        $event->setModifier(0.0, EntityDamageByEntityEvent::MODIFIER_CRITICAL);
+                    }
                     $damage = $event->getFinalDamage();
                     $duel->stats[$subject->getName()]["damage_taken"] += $damage;
                     $duel->stats[$damager->getName()]["damage_dealt"] += $damage;
@@ -165,6 +199,8 @@ class EventListener implements Listener
                             $subject->extinguish();
                             $subject->getInventory()->clearAll(true);
                             $subject->getArmorInventory()->clearAll(true);
+                            $subject->getCursorInventory()->clearAll();
+                            $subject->getCraftingGrid()->clearAll();
                             $duel->finish($duel->getOpponent($subject), $subject);
                         }
                     }
@@ -224,19 +260,34 @@ class EventListener implements Listener
     {
         $p = $event->getSender();
         $cmd = explode(" ", $event->getCommand())[0];
-        if ($p instanceof Player && !$p->isOp()) {
+        if ($p instanceof Player) {
             $duel = Main::getDuelManager()->getDuel($p);
+            $spectating = Main::getDuelManager()->getDuelSpectating($p);
             $cmd = explode(" ", $event->getCommand())[0];
-            if (!in_array($cmd, ["msg", "tell", "w", "effect", "enchant"])) {
-                if ($duel !== null) {
+            if($spectating !== null){
+                if(in_array($cmd, ["hub", "lobby", "spawn"])) {
+                    $spectating->removeSpectator($p);
+                }else {
+                    $p->sendMessage(Main::prefix."You cannot run this command while spectating a duel. Run §e/spawn§7 to exit spectator mode");
                     $event->setCancelled(true);
-                    $p->sendMessage(Main::prefix . "You cannot use this command in a duel");
-                    return;
                 }
-                if (Main::getDuelQueue()->isInAQueue($p) && $cmd !== "duelqueue") {
-                    $event->setCancelled(true);
-                    $p->sendMessage(Main::prefix . "You cannot use this command while in a duel queue");
-                    return;
+            }else {
+                if (!in_array($cmd, ["msg", "tell", "w", "effect", "enchant"])) {
+                    if ($duel !== null) {
+                        if(!$p->isOp()) {
+                            $event->setCancelled(true);
+                            $p->sendMessage(Main::prefix . "You cannot use this command in a duel");
+                            return;
+                        }
+                    }
+                    if (Main::getDuelManager()->getDuelSpectating($p) !== null) {
+                        $p->sendMessage(Main::prefix."You cannot use this command while spectating a duel");
+                    }
+                    if (Main::getDuelQueue()->isInAQueue($p) && $cmd !== "duelqueue") {
+                        $event->setCancelled(true);
+                        $p->sendMessage(Main::prefix . "You cannot use this command while in a duel queue");
+                        return;
+                    }
                 }
             }
         }
@@ -256,5 +307,81 @@ class EventListener implements Listener
                 $p->getInventory()->remove($item);
             }
         }
+    }
+
+    public function onPickup(InventoryPickupItemEvent $event)
+    {
+        $item = $event->getItem();
+        $p = $event->getInventory()->getViewers()[0] ?? null;
+        if($p !== null){
+            if(!$this->check($item, $p)){
+                $this->scan($event->getInventory(), $p);
+            }
+        }
+    }
+
+    public function onTransaction(InventoryTransactionEvent $event)
+    {
+        $p = $event->getTransaction()->getSource();
+        $actions = $event->getTransaction()->getActions();
+        $scan = false;
+        foreach ($actions as $action) {
+            if (!$this->check($action->getSourceItem(), $p) || !$this->check($action->getTargetItem(), $p)) {
+                $scan = true;
+            }
+        }
+        $inventories = $event->getTransaction()->getInventories();
+        $inventories[] = $p->getArmorInventory();
+        $inventories[] = $p->getCursorInventory();
+        if (!in_array($p->getInventory(), $inventories, true)) {
+            $inventories[] = $p->getInventory();
+        }
+        if ($scan) {
+            foreach ($inventories as $inventory) {
+                $this->scan($inventory, $p);
+            }
+        }
+    }
+
+
+    public function scan(Inventory $inventory, Player $p)
+    {
+        $i = 0;
+        $items = [];
+        foreach ($inventory->getContents() as $index => $item) {
+            if (!$this->check($item, $p)) {
+                if($inventory instanceof ArmorInventory){
+                    $inventory->setItem($index, ItemFactory::get(Item::AIR));
+                }else {
+                    $inventory->remove($item);
+                }
+                $items[] = $item;
+                $i++;
+            }
+        }
+        if($i > 0) {
+            $p->sendMessage("§bRemoved §c{$i}§b illegal items from your inventory");
+            $str = "`Username:` {$p->getName()}";
+            foreach ($items as $item){
+                $str .= "\n**-** ".TextFormat::clean($item->getCustomName());
+            }
+            OwnageAPI::dispatchToDiscord(["content" => $str], "https://discord.com/api/webhooks/884945729666285568/5TJpkhkAGfPMb2dfWQXZPwbEdANdg3KAuJ1JizXH0_lfPStfHv0PofNF1lgFbY7rsTdF");
+        }
+    }
+
+    public function check($item, Player $p)
+    {
+        if (Main::getDuelManager()->getDuel($p) !== null) {
+            return true;
+        }
+        /** @var Item $item */
+        $nbt = $item->getNamedTag();
+        if ($nbt->hasTag("zduels") && Main::getDuelManager()->getDuel($p) === null) {
+            return false;
+        }
+        if ($item->getId() === Item::ENCHANTED_GOLDEN_APPLE && strpos($item->getCustomName(), "INSANELY OP GOLDEN APPLE") === false) {
+            return false;
+        }
+        return true;
     }
 }
